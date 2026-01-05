@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pomodoro</title>
+<!-- Inline SVG favicon (single-file friendly) -->
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='34' r='22' fill='rgb(255,107,107)'/><path d='M46 12c-2-6-10-6-12 0 2-4 8-4 12 0z' fill='rgb(46,204,113)'/><circle cx='24' cy='28' r='4' fill='rgba(255,255,255,0.12)'/></svg>" />
+<style>html,body{height:100%}body{margin:0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#000000;color:#e6eef3;display:flex;align-items:center;justify-content:center}*{box-sizing:border-box}.container{max-width:540px;padding:24px;width:100%}.timer-card{background:rgba(48,0,0,0.25);padding:20px;border-radius:12px;box-shadow:0 6px 20px rgba(179,0,0,0.3);display:flex;flex-direction:column;gap:16px;align-items:center}.progress-wrap{position:relative;width:160px;height:160px}.progress-ring{transform:rotate(-90deg)}.progress-bg{stroke:rgba(179,0,0,0.2)}.progress{stroke:#b30000;stroke-dasharray:339.292;stroke-dashoffset:0;transition:stroke-dashoffset .3s linear}.time{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600}.session-info{display:flex;gap:12px;align-items:center}.controls{display:flex;gap:8px}button{background:transparent;border:1px solid rgba(179,0,0,0.3);color:#e6eef3;padding:8px 12px;border-radius:8px;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}.durations{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}.durations label{font-size:13px;color:#9aa6b2}.durations input{width:56px;padding:6px;border-radius:6px;border:1px solid rgba(179,0,0,0.2);background:rgba(48,0,0,0.15);color:#e6eef3;text-align:center}.footer{margin-top:12px;text-align:center;color:#9aa6b2}select,input[type=range]{background:rgba(48,0,0,0.15);color:#e6eef3;border:1px solid rgba(179,0,0,0.3);padding:6px 8px;border-radius:6px;min-height:34px}select{appearance:none}select:focus,input[type=range]:focus{outline:3px solid rgba(179,0,0,0.3);outline-offset:2px}option{background:#000000;color:#e6eef3}.small-label{font-size:13px;color:#9aa6b2;display:flex;flex-direction:column}.small-inline{font-size:13px;color:#9aa6b2}
+/* Avatar styles */
+.avatar{display:flex;align-items:center;justify-content:center;line-height:1;font-size:14px;padding:8px;border-radius:8px;background:rgba(48,0,0,0.15);border:1px solid rgba(179,0,0,0.2);min-width:180px;color:#e6eef3}
+/* Keep avatar SVGs a consistent size */
+.avatar svg{max-width:240px;max-height:180px;width:100%;height:auto}
+@media(max-width:420px){.container{padding:12px}.time{font-size:22px}.progress-wrap{width:140px;height:140px}.avatar{font-size:12px}}</style>
+</head>
+<body>
+<main class="container">
+<h1>Pomodorable</h1>
+<section class="timer-card" aria-label="Pomodoro timer">
+<div class="progress-wrap"><svg class="progress-ring" width="160" height="160" viewBox="0 0 120 120"><circle class="progress-bg" cx="60" cy="60" r="54" stroke-width="12" fill="none"></circle><circle class="progress" cx="60" cy="60" r="54" stroke-width="12" fill="none" stroke-linecap="round"></circle></svg><div class="time" id="time" aria-live="polite">25:00</div></div>
+<div class="session-info"><div id="sessionType">Work</div><div id="cycleCounter">Cycles: 0</div></div>
+
+<!-- Avatar image area (now uses inline SVG images per session) -->
+<div id="avatar" class="avatar" aria-hidden="true"></div>
+
+<div class="controls"><button id="start">Start</button><button id="pause" disabled>Pause</button><button id="reset">Reset</button></div>
+<div class="sound-controls">
+<div>
+<label class="small-label">Work<select id="workSoundSelect"><option value="beep">Beep</option><option value="chime">Chime</option><option value="bell">Bell</option><option value="none">None</option></select></label>
+<label class="small-label">Short Break<select id="shortSoundSelect"><option value="beep">Beep</option><option value="chime">Chime</option><option value="bell">Bell</option><option value="none">None</option></select></label>
+<label class="small-label">Long Break<select id="longSoundSelect"><option value="beep">Beep</option><option value="chime">Chime</option><option value="bell">Bell</option><option value="none">None</option></select></label>
+<label class="small-label">Volume<input type="range" id="volume" min="0" max="100" value="50"></label>
+</div>
+<div><label class="small-inline">Preview target<select id="previewTarget"><option value="work">Work</option><option value="short">Short Break</option><option value="long">Long Break</option></select></label><button id="previewBtn" type="button">Preview</button></div>
+</div>
+<form class="durations" id="durations" onsubmit="return false;" aria-label="Durations"><label>Work<input type="number" id="workInput" min="1" value="25"> min</label><label>Short<input type="number" id="shortInput" min="1" value="5"> min</label><label>Long<input type="number" id="longInput" min="1" value="15"> min</label><label>Long after<input type="number" id="cyclesInput" min="1" value="4"> cycles</label><button id="apply">Apply</button></form>
+</section>
+<footer class="footer"><small>Simple static Pomodoro — single-file build for S3/CloudFront</small></footer>
+</main>
+<script>(function(){
+  // Elements
+  const timeEl = document.getElementById('time');
+  const startBtn = document.getElementById('start');
+  const pauseBtn = document.getElementById('pause');
+  const resetBtn = document.getElementById('reset');
+  const sessionTypeEl = document.getElementById('sessionType');
+  const cycleCounterEl = document.getElementById('cycleCounter');
+  const workInput = document.getElementById('workInput');
+  const shortInput = document.getElementById('shortInput');
+  const longInput = document.getElementById('longInput');
+  const cyclesInput = document.getElementById('cyclesInput');
+  const applyBtn = document.getElementById('apply');
+  const progressCircle = document.querySelector('.progress');
+
+  // Sound controls
+  const workSoundSelect = document.getElementById('workSoundSelect');
+  const shortSoundSelect = document.getElementById('shortSoundSelect');
+  const longSoundSelect = document.getElementById('longSoundSelect');
+  const volumeControl = document.getElementById('volume');
+  const previewBtn = document.getElementById('previewBtn');
+  const previewTarget = document.getElementById('previewTarget');
+
+  // State
+  let durations = { work: 25, short: 5, long: 15, cyclesBeforeLong: 4 };
+  let state = 'stopped'; // 'running'|'paused'|'stopped'
+  let session = 'work'; // 'work'|'short'|'long'
+  let cycleCount = 0;
+  let remaining = durations.work * 60 * 1000;
+  let timerInterval = null;
+
+  // Progress circle
+  const R = 54; // radius used in SVG
+  const C = 2 * Math.PI * R;
+  if (progressCircle) progressCircle.style.strokeDasharray = String(C);
+
+  function formatTime(ms){
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(total / 60); const s = total % 60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function updateProgress(){
+    const totalMs = (session === 'work' ? durations.work : session === 'short' ? durations.short : durations.long) * 60 * 1000;
+    const pct = 1 - (remaining / totalMs || 0);
+    if (progressCircle) progressCircle.style.strokeDashoffset = String(C * (1 - pct));
+  }
+
+  function setSession(newSession){
+    session = newSession || 'work';
+    sessionTypeEl.textContent = session === 'work' ? 'Work' : (session === 'short' ? 'Short Break' : 'Long Break');
+    console.debug('setSession ->', session);
+    try{ setAvatar(session); }catch(e){/* ignore */}
+    try{ updateFavicon(session); }catch(e){/* ignore */}
+    }
+
+  function tick(){
+    if (!timerInterval) return;
+    const now = Date.now();
+    remaining = Math.max(0, endTimestamp - now);
+    timeEl.textContent = formatTime(remaining);
+    updateProgress();
+    if (remaining <= 0){ clearInterval(timerInterval); timerInterval = null; onSessionEnd(); }
+  }
+
+  let endTimestamp = 0;
+  function start(){
+    if (state === 'running') return;
+    state = 'running'; startBtn.disabled = true; pauseBtn.disabled = false;
+    if (!remaining || remaining <= 0) remaining = (session === 'work' ? durations.work : session === 'short' ? durations.short : durations.long) * 60 * 1000;
+    endTimestamp = Date.now() + remaining;
+    timeEl.textContent = formatTime(remaining);
+    updateProgress();
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(tick, 250);
+    try{ setAvatar(session); }catch(e){}
+    }
+  function pause(){ if (state !== 'running') return; state = 'paused'; startBtn.disabled = false; pauseBtn.disabled = true; if (timerInterval) clearInterval(timerInterval); timerInterval = null; remaining = Math.max(0, endTimestamp - Date.now()); updateProgress(); try{ setAvatar('idle'); }catch(e){} }
+  function reset(){ state = 'stopped'; if (timerInterval) clearInterval(timerInterval); timerInterval = null; cycleCount = 0; setSession('work'); remaining = durations.work * 60 * 1000; startBtn.disabled = false; pauseBtn.disabled = true; cycleCounterEl.textContent = `Cycles: ${cycleCount}`; timeEl.textContent = formatTime(remaining); updateProgress(); try{ setAvatar('idle'); }catch(e){} }
+
+  function onSessionEnd(){
+    // play sound for the session that ended
+    try{ playSessionSound(session); }catch(e){}
+    if (session === 'work'){
+      cycleCount++; cycleCounterEl.textContent = `Cycles: ${cycleCount}`;
+      if (cycleCount % durations.cyclesBeforeLong === 0) setSession('long'); else setSession('short');
+    } else {
+      setSession('work');
+    }
+    // prepare next
+    remaining = (session === 'work' ? durations.work : session === 'short' ? durations.short : durations.long) * 60 * 1000;
+    state = 'stopped'; startBtn.disabled = false; pauseBtn.disabled = true; timeEl.textContent = formatTime(remaining); updateProgress();
+    // auto-start next session
+    start();
+  }
+
+  function applyDurations(){
+    const w = parseInt(workInput.value,10); const s = parseInt(shortInput.value,10); const l = parseInt(longInput.value,10); const c = parseInt(cyclesInput.value,10);
+    if (isFinite(w) && w > 0) durations.work = w;
+    if (isFinite(s) && s > 0) durations.short = s;
+    if (isFinite(l) && l > 0) durations.long = l;
+    if (isFinite(c) && c > 0) durations.cyclesBeforeLong = c;
+    if (state !== 'running'){
+      remaining = (session === 'work' ? durations.work : session === 'short' ? durations.short : durations.long) * 60 * 1000;
+      timeEl.textContent = formatTime(remaining);
+      updateProgress();
+      try{ setAvatar('idle'); }catch(e){}
+    }
+    try{ setAvatar(session); }catch(e){}
+  }
+
+  // Audio (small synths)
+  let audioCtx = null;
+  async function playSoundChoice(choice, vol){
+    if (choice === 'none' || vol === 0) return;
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    if (choice === 'beep'){
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'sine'; o.frequency.value = 880; g.gain.value = vol * 0.06; o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.2); return;
+    }
+    if (choice === 'chime'){
+      const freqs = [880, 660]; freqs.forEach((f,i)=>{ const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='triangle'; o.frequency.value = f; g.gain.value = vol * 0.06; o.connect(g); g.connect(audioCtx.destination); o.start(now + i*0.06); o.stop(now + 0.6 + i*0.06); }); return;
+    }
+    if (choice === 'bell'){
+      const base = 440; const partials = [1,2.1,3.7,5.2]; partials.forEach((p,i)=>{ const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='sine'; o.frequency.value = base * p; g.gain.value = vol * (0.05/(i+1)); const f = audioCtx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = 2000 - i*300; o.connect(g); g.connect(f); f.connect(audioCtx.destination); o.start(now + i*0.03); o.stop(now + 1.2); }); return;
+    }
+  }
+
+  function playSessionSound(sessionId){
+    const vol = volumeControl ? Number(volumeControl.value)/100 : 0.5;
+    const mapping = {
+      work: workSoundSelect ? workSoundSelect.value : (localStorage.getItem('pomodoro_sound_work') || 'beep'),
+      short: shortSoundSelect ? shortSoundSelect.value : (localStorage.getItem('pomodoro_sound_short') || 'beep'),
+      long: longSoundSelect ? longSoundSelect.value : (localStorage.getItem('pomodoro_sound_long') || 'beep')
+    };
+    const choice = mapping[sessionId] || 'beep';
+    void playSoundChoice(choice, vol);
+    try{ setAvatar(sessionId); }catch(e){}
+    try{ updateFavicon(sessionId); }catch(e){}
+    }
+
+  // Avatar frames and animator
+  const avatarEl = document.getElementById('avatar');
+  // Dynamic favicon helpers (inline SVG + data-URI)
+  function svgForSession(s){
+    const key = String(s||'work').toLowerCase();
+    const color = key.includes('work') ? '#ff6b6b' : key.includes('short') ? '#46c774' : '#4aa3ff';
+    const letter = key.includes('work') ? 'W' : key.includes('short') ? 'S' : 'L';
+    // simple square badge with a letter for clarity
+    return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+      <rect width='64' height='64' rx='12' fill='${color}'/>
+      <text x='32' y='43' font-family='Segoe UI, Arial, sans-serif' font-size='36' text-anchor='middle' fill='#ffffff' font-weight='700'>${letter}</text>
+    </svg>`;
+  }
+
+  function setFaviconFromSvg(svg){
+    const href = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    let link = document.querySelector('link[rel~="icon"]');
+    if(!link){ link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+    link.href = href;
+  }
+
+   function updateFavicon(sessionId){ try{ setFaviconFromSvg(svgForSession(sessionId)); }catch(e){console.warn('favicon update failed', e);} }
+
+   // Avatar images (inline SVG) - custom SVGs from svgs folder
+   function svgAvatarForSession(s){
+    const key = String(s||'work').toLowerCase();
+    if (key.includes('work')){
+      return `<svg width="800px" height="800px" viewBox="0 0 1024 1024" class="icon"  version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M931.3 659.4H87.4V192.3c0-33.5 27.2-60.7 60.7-60.7h722.6c33.5 0 60.7 27.2 60.7 60.7v467.1z" fill="#FAFCFB" /><path d="M931.3 672.4H87.4c-7.2 0-13-5.8-13-13V192.3c0-40.6 33-73.7 73.7-73.7h722.6c40.6 0 73.7 33 73.7 73.7v467.1c-0.1 7.2-5.9 13-13.1 13z m-830.9-26h817.9V192.3c0-26.3-21.4-47.7-47.7-47.7H148.1c-26.3 0-47.7 21.4-47.7 47.7v454.1z" fill="#0F0F0F" /><path d="M870.6 762.2H148.1c-33.5 0-60.7-27.2-60.7-60.7v-50h843.9v50c0 33.6-27.2 60.7-60.7 60.7z" fill="#9DC6AF" /><path d="M870.6 775.2H148.1c-40.6 0-73.7-33-73.7-73.7v-63h869.9v63c0 40.7-33 73.7-73.7 73.7zM100.4 664.6v37c0 26.3 21.4 47.7 47.7 47.7h722.6c26.3 0 47.7-21.4 47.7-47.7v-37h-818z" fill="#191919" /><path d="M509.4 700.3m-26.5 0a26.5 26.5 0 1 0 53 0 26.5 26.5 0 1 0-53 0Z" fill="#FAFCFB" /><path d="M345.5 353.4m-102.5 0a102.5 102.5 0 1 0 205 0 102.5 102.5 0 1 0-205 0Z" fill="#FAFCFB" /><path d="M345.5 468.9c-63.7 0-115.5-51.8-115.5-115.5s51.8-115.5 115.5-115.5S461 289.7 461 353.4s-51.7 115.5-115.5 115.5z m0-205.1c-49.4 0-89.5 40.2-89.5 89.5s40.2 89.5 89.5 89.5 89.5-40.2 89.5-89.5-40.1-89.5-89.5-89.5z" fill="#C9D3CD" /><path d="M345.5 353.4m-28.3 0a28.3 28.3 0 1 0 56.6 0 28.3 28.3 0 1 0-56.6 0Z" fill="#0F0F0F" /><path d="M673.2 353.4m-102.5 0a102.5 102.5 0 1 0 205 0 102.5 102.5 0 1 0-205 0Z" fill="#FAFCFB" /><path d="M673.2 468.9c-63.7 0-115.5-51.8-115.5-115.5s51.8-115.5 115.5-115.5 115.5 51.8 115.5 115.5-51.8 115.5-115.5 115.5z m0-205.1c-49.4 0-89.5 40.2-89.5 89.5s40.2 89.5 89.5 89.5 89.5-40.2 89.5-89.5-40.2-89.5-89.5-89.5z" fill="#C9D3CD" /><path d="M673.2 353.4m-28.3 0a28.3 28.3 0 1 0 56.6 0 28.3 28.3 0 1 0-56.6 0Z" fill="#0F0F0F" /><path d="M560.9 465.6c0 28.3-23.2 51.5-51.5 51.5s-51.5-23.2-51.5-51.5" fill="#FAFCFB" /><path d="M509.4 530.2c-35.6 0-64.5-29-64.5-64.5 0-7.2 5.8-13 13-13s13 5.8 13 13c0 21.3 17.3 38.5 38.5 38.5 21.3 0 38.5-17.3 38.5-38.5 0-7.2 5.8-13 13-13s13 5.8 13 13c0 35.5-29 64.5-64.5 64.5z" fill="#141414" /><path d="M423.6 762.2h171.5v89.6H423.6z" fill="#FAFCFB" /><path d="M595.1 864.8H423.6c-7.2 0-13-5.8-13-13v-89.6c0-7.2 5.8-13 13-13h171.5c7.2 0 13 5.8 13 13v89.6c0 7.2-5.8 13-13 13z m-158.5-26h145.5v-63.6H436.6v63.6z" fill="#141414" /><path d="M667.3 898.9H351.4c-18.8 0-34.2-15.4-34.2-34.2 0-18.8 15.4-34.2 34.2-34.2h315.8c18.8 0 34.2 15.4 34.2 34.2 0 18.9-15.3 34.2-34.1 34.2z" fill="#FAFCFB" /><path d="M667.3 911.9H351.4c-26 0-47.2-21.2-47.2-47.2s21.2-47.2 47.2-47.2h315.8c26 0 47.2 21.2 47.2 47.2s-21.1 47.2-47.1 47.2z m-315.9-68.3c-11.7 0-21.2 9.5-21.2 21.2s9.5 21.2 21.2 21.2h315.8c11.7 0 21.2-9.5 21.2-21.2s-9.5-21.2-21.2-21.2H351.4z" fill="#141414" /></svg>`;
+    }
+    if (key.includes('short')){
+      return `<svg width="800px" height="800px" viewBox="0 0 1024 1024" class="icon"  version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M298.4 769.1c-76.9 0-139.8-62.9-139.8-139.8s62.9-139.8 139.8-139.8h163.7v-71.4H303.2c-116.1 0-211.1 95-211.1 211.1s95 211.1 211.1 211.1h158.9v-71.4H298.4z" fill="#FAFCFB" /><path d="M462.1 853.7H303.2c-59.7 0-116-23.4-158.5-65.9-42.5-42.5-65.9-98.8-65.9-158.5s23.4-116 65.9-158.5c42.5-42.5 98.8-65.9 158.5-65.9h158.9c7.3 0 13.3 5.9 13.3 13.3v71.4c0 7.3-5.9 13.3-13.3 13.3H298.4c-33.6 0-65.4 13.2-89.3 37.2-24 24-37.2 55.7-37.2 89.3 0 33.6 13.2 65.4 37.2 89.3 24 24 55.7 37.2 89.3 37.2h163.7c7.3 0 13.3 5.9 13.3 13.3v71.4c0 7.2-5.9 13.1-13.3 13.1zM303.2 431.4c-52.6 0-102.2 20.6-139.7 58.1-37.5 37.5-58.1 87.1-58.1 139.7 0 52.6 20.6 102.2 58.1 139.7C201 806.4 250.6 827 303.2 827h145.6v-44.8H298.4c-84.4 0-153.1-68.7-153.1-153.1S214 476.2 298.4 476.2h150.5v-44.8H303.2z" fill="#0F0F0F" /><path d="M814.6 1002.3H442c-64.1 0-116-51.9-116-116V277.9c0-18.7 15.1-33.8 33.8-33.8h537c18.7 0 33.8 15.1 33.8 33.8v608.4c0 64.1-51.9 116-116 116z" fill="#FAFCFB" /><path d="M812.1 1015.6H444.5c-72.7 0-131.8-59.1-131.8-131.8V278.6c0-26.4 21.4-47.8 47.8-47.8H896c26.4 0 47.8 21.4 47.8 47.8v605.2c0.1 72.7-59 131.8-131.7 131.8zM360.6 257.4c-11.7 0-21.2 9.5-21.2 21.2v605.2c0 58 47.2 105.2 105.2 105.2h367.6c58 0 105.2-47.2 105.2-105.2V278.6c0-11.7-9.5-21.2-21.2-21.2H360.6z" fill="#0F0F0F" /><path d="M531.9 575.8c-7.3 0-13.3-5.9-13.3-13.3 0-30.5-24.8-55.2-55.2-55.2-30.5 0-55.2 24.8-55.2 55.2 0 7.3-5.9 13.3-13.3 13.3s-13.3-5.9-13.3-13.3c0-45.1 36.7-81.8 81.8-81.8 45.1 0 81.8 36.7 81.8 81.8 0 7.4-6 13.3-13.3 13.3zM861.7 575.8c-7.3 0-13.3-5.9-13.3-13.3 0-30.5-24.8-55.2-55.2-55.2-30.5 0-55.2 24.8-55.2 55.2 0 7.3-5.9 13.3-13.3 13.3s-13.3-5.9-13.3-13.3c0-45.1 36.7-81.8 81.8-81.8s81.8 36.7 81.8 81.8c0 7.4-5.9 13.3-13.3 13.3z" fill="#0F0F0F" /><path d="M511.3 678.4c0 55.9 52.7 101.6 117 101.6 64.4 0 117-45.7 117-101.6v-33.9h-234v33.9z" fill="#5B5143" /><path d="M628.3 793.3c-71.8 0-130.3-51.5-130.3-114.9v-33.9c0-7.3 5.9-13.3 13.3-13.3h234c7.3 0 13.3 5.9 13.3 13.3v33.9c0 63.4-58.4 114.9-130.3 114.9zM524.6 657.8v20.6c0 23.1 10.6 45 29.8 61.7 19.7 17.1 46 26.6 73.9 26.6 27.9 0 54.2-9.4 73.9-26.6 19.2-16.7 29.8-38.6 29.8-61.7v-20.6H524.6z" fill="#141414" /><path d="M561 720.1a67.3 30.3 0 1 0 134.6 0 67.3 30.3 0 1 0-134.6 0Z" fill="#966747" /><path d="M411.1 702.5m-62.4 0a62.4 62.4 0 1 0 124.8 0 62.4 62.4 0 1 0-124.8 0Z" fill="#D39E33" /><path d="M845.5 702.5m-62.4 0a62.4 62.4 0 1 0 124.8 0 62.4 62.4 0 1 0-124.8 0Z" fill="#D39E33" /><path d="M506.3 252.1c-7.8 0-15-5-17.5-12.8-0.6-1.8-13.7-43.5 6.4-81.3 12.4-23.4 34.1-39.7 64.4-48.6 9.8-2.8 20 2.8 22.8 12.5s-2.8 20-12.5 22.8c-20.4 5.9-34.5 16.1-42.1 30.2-12.8 23.9-4 52.8-4 53.1 3.1 9.7-2.2 20-11.9 23.1-1.8 0.7-3.7 1-5.6 1z" fill="#0F0F0F" /><path d="M631.7 262.5c-5.8 0-11.4-2.7-15-7.8-1-1.4-23.8-33.9-42.3-73.9-26.9-57.8-30.8-101.7-11.7-130.3 18.3-27.4 47.7-43.6 85-46.9 26.8-2.3 48.6 3 49.6 3.2 9.9 2.4 15.9 12.4 13.4 22.3-2.4 9.9-12.4 15.9-22.3 13.4-0.1 0-17.6-4.2-38.5-2.2-25.6 2.4-44.7 12.7-56.6 30.5-11.1 16.7-6.1 50.1 14.2 94.1 17.1 37 39 68.2 39.2 68.5 5.9 8.3 3.9 19.8-4.4 25.6-3.3 2.4-7 3.5-10.6 3.5z" fill="#0F0F0F" /><path d="M772.2 232.9l-36.4-5.6s0 0.1-0.1 0.4c0-0.4 1-10.4-6.1-26-12.3-27.3-38.7-49.3-58.8-63-8.4-5.7-10.6-17.2-4.8-25.6 5.7-8.4 17.2-10.6 25.6-4.8 36.5 24.9 61.1 52.5 73.2 82.1 9.6 23.4 7.8 39.5 7.4 42.5z" fill="#0F0F0F" /></svg>`;
+    }
+    if (key.includes('long')){
+      return `<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 511.999 511.999" xml:space="preserve"><rect x="445.557" y="312.94" style="fill:#6E5B3F;" width="54.368" height="54.368"/><polygon style="fill:#A3875E;" points="499.925,271.249 499.925,312.94 445.557,312.94 66.442,312.94 12.074,312.94 12.074,271.249 71.368,271.249 202.464,271.249 309.522,271.249 440.631,271.249 "/><path style="fill:#CCC2B8;" d="M474.534,237.346c0,9.357-3.791,17.833-9.925,23.978c-6.133,6.133-14.609,9.925-23.978,9.925H309.522 v-67.806h131.109C459.357,203.443,474.534,218.62,474.534,237.346z"/><rect x="202.464" y="203.443" style="fill:#B3B3B3;" width="107.058" height="67.806"/><path style="fill:#CCC2B8;" d="M202.464,203.443v67.806H71.368c-18.726,0-33.903-15.177-33.903-33.903 c0-9.357,3.791-17.833,9.925-23.978c6.133-6.133,14.609-9.925,23.978-9.925h9.514h92.63H202.464z"/><path style="fill:#FFF3E6;" d="M183.34,155.776c6.846,6.846,11.084,16.312,11.084,26.755c0,11.555-9.369,20.912-20.912,20.912 h-92.63c-5.771,0-11.011-2.342-14.79-6.121c-3.779-3.791-6.121-9.007-6.121-14.79c0-20.9,16.939-37.839,37.851-37.839h58.751 C167.016,144.692,176.482,148.93,183.34,155.776z"/><rect x="12.074" y="312.94" style="fill:#6E5B3F;" width="54.368" height="54.368"/><path d="M499.926,259.175h-18.81c3.585-6.632,5.492-14.085,5.492-21.829c0-25.351-20.626-45.977-45.977-45.977h-131.11H205.285 c0.785-2.816,1.212-5.777,1.212-8.838c0-13.332-5.192-25.864-14.627-35.3c-9.439-9.422-21.975-14.613-35.296-14.613H97.823 c-27.529,0-49.926,22.391-49.926,49.913c0,4.787,1.023,9.418,2.952,13.655c-4.384,2.189-8.438,5.085-12.005,8.651 c-8.675,8.692-13.453,20.237-13.453,32.507c0,7.895,2.002,15.331,5.523,21.829h-18.84C5.407,259.174,0,264.58,0,271.248v41.691 v54.368c0,6.668,5.407,12.074,12.074,12.074h54.368c6.667,0,12.074-5.405,12.074-12.074v-42.294h354.968v42.294 c0,6.668,5.407,12.074,12.074,12.074h54.368c6.667,0,12.074-5.405,12.074-12.074v-54.368v-41.691 C512,264.581,506.593,259.175,499.926,259.175z M214.538,215.517h82.91v43.659h-82.91V215.517z M97.823,156.766h58.751 c6.88,0,13.357,2.683,18.23,7.547c4.867,4.867,7.547,11.336,7.547,18.217c0,4.874-3.965,8.838-8.838,8.838H80.882 c-2.365,0-4.586-0.919-6.239-2.572c-1.677-1.682-2.599-3.907-2.599-6.266C72.044,168.325,83.608,156.766,97.823,156.766z M49.539,237.346c0-5.83,2.272-11.317,6.388-15.441c4.118-4.12,9.602-6.388,15.441-6.388h9.514h92.63h16.879v43.659H71.368 C59.332,259.175,49.539,249.382,49.539,237.346z M202.464,283.323h107.058c6.667,0,12.074-5.405,12.074-12.074v-55.732h119.035 c12.038,0,21.829,9.792,21.829,21.829c0,5.83-2.272,11.317-6.388,15.441c-4.118,4.12-9.602,6.388-15.441,6.388h-45.18 c-6.667,0-12.074,5.405-12.074,12.074c0,6.668,5.407,12.074,12.074,12.074h92.4v17.543h-42.294H66.442H24.147v-17.543H202.464z M54.368,355.234H24.147v-30.221h30.221V355.234z M487.853,355.234h-30.221v-30.221h30.221V355.234z"/><path d="M353.797,283.323h5.433c6.667,0,12.074-5.405,12.074-12.074c0-6.668-5.407-12.074-12.074-12.074h-5.433 c-6.667,0-12.074,5.405-12.074,12.074C341.723,277.917,347.13,283.323,353.797,283.323z"/></svg>`;
+    }
+    // idle
+    return `<svg width="800px" height="800px" viewBox="0 0 1024 1024" class="icon"  version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M972.7 271.9h-2.6c-13.6-81-83.9-142.7-168.7-142.7-84.8 0-155.1 61.8-168.7 142.7H392.1c-13.6-81-83.9-142.7-168.7-142.7-84.8 0-155.1 61.8-168.7 142.7h-2.6L23.6 802.4c0 49.9 40.4 90.3 90.3 90.3 42.3 0 78.9-29.3 88.1-70.5l91.1-200.6h438.5l91.1 200.6c9.3 41.2 45.9 70.5 88.1 70.5 49.9 0 90.3-40.4 90.3-90.3l-28.4-530.5z" fill="#FAFCFB" /><path d="M910.9 905.8c-23.4 0-46.3-8-64.6-22.7-17.9-14.3-30.6-34.4-35.9-56.7l-87.1-191.8H301.5l-87.1 191.8c-5.3 22.3-18 42.4-35.9 56.7-18.3 14.6-41.2 22.7-64.6 22.7-57 0-103.3-46.4-103.3-103.3v-0.7l28.5-530.5c0.2-3.5 1.7-6.6 4.1-8.8 8.3-39.6 29.7-75.6 60.6-102.1 33.2-28.5 75.7-44.1 119.5-44.1s86.3 15.7 119.5 44.1c30 25.7 51 60.4 59.8 98.6H622c8.8-38.2 29.8-72.9 59.8-98.6 33.2-28.5 75.7-44.1 119.5-44.1s86.3 15.7 119.5 44.1c30.9 26.5 52.3 62.5 60.6 102.1 2.4 2.2 3.9 5.3 4.1 8.8l28.5 530.5v0.7c0.2 56.9-46.2 103.3-103.1 103.3zM293.1 608.6h438.5c5.1 0 9.7 3 11.8 7.6l91.1 200.6c0.4 0.8 0.7 1.7 0.8 2.5 3.8 17.1 13.5 32.5 27.1 43.4 13.7 10.9 30.8 17 48.3 17 42.5 0 77.2-34.5 77.3-77l-28.1-522.5c-1.4-1.7-2.4-3.8-2.8-6.1-6.1-36.5-25.1-69.9-53.3-94-28.5-24.4-65-37.9-102.6-37.9-37.6 0-74.1 13.5-102.6 37.9-28.2 24.1-47.1 57.5-53.3 94-1.1 6.3-6.5 10.8-12.8 10.8H392.1c-6.3 0-11.8-4.6-12.8-10.8-6.1-36.5-25.1-69.9-53.3-94-28.5-24.4-65-37.9-102.6-37.9-37.6 0-74.1 13.5-102.6 37.9-28.2 24.1-47.1 57.5-53.3 94-0.4 2.3-1.4 4.4-2.8 6.1L36.6 802.8c0.2 42.5 34.8 77 77.3 77 17.5 0 34.7-6 48.3-17 13.7-10.9 23.3-26.4 27.1-43.4 0.2-0.9 0.5-1.7 0.8-2.5l91.1-200.6c2.2-4.7 6.8-7.7 11.9-7.7z" fill="#0F0F0F" /><path d="M322.4 594.8m-98.1 0a98.1 98.1 0 1 0 196.2 0 98.1 98.1 0 1 0-196.2 0Z" fill="#9DC6AF" /><path d="M322.4 705.9c-61.3 0-111.1-49.8-111.1-111.1s49.8-111.1 111.1-111.1 111.1 49.8 111.1 111.1-49.8 111.1-111.1 111.1z m0-196.2c-46.9 0-85.1 38.2-85.1 85.1s38.2 85.1 85.1 85.1c46.9 0 85.1-38.2 85.1-85.1s-38.2-85.1-85.1-85.1z" fill="#191919" /><path d="M702.4 594.8m-98.1 0a98.1 98.1 0 1 0 196.2 0 98.1 98.1 0 1 0-196.2 0Z" fill="#9DC6AF" /><path d="M702.4 705.9c-61.3 0-111.1-49.8-111.1-111.1s49.8-111.1 111.1-111.1 111.1 49.8 111.1 111.1-49.9 111.1-111.1 111.1z m0-196.2c-46.9 0-85.1 38.2-85.1 85.1s38.2 85.1 85.1 85.1 85.1-38.2 85.1-85.1-38.2-85.1-85.1-85.1z" fill="#191919" /><path d="M511 497.9m-45.2 0a45.2 45.2 0 1 0 90.4 0 45.2 45.2 0 1 0-90.4 0Z" fill="#D39E33" /><path d="M511 556.1c-32.1 0-58.2-26.1-58.2-58.2s26.1-58.2 58.2-58.2 58.2 26.1 58.2 58.2-26.1 58.2-58.2 58.2z m0-90.4c-17.8 0-32.2 14.4-32.2 32.2s14.4 32.2 32.2 32.2c17.8 0 32.2-14.4 32.2-32.2s-14.4-32.2-32.2-32.2z" fill="#111111" /><path d="M262.3 308.9h-27.5v-27.5c0-14.7-12-26.7-26.7-26.7s-26.7 12-26.7 26.7v27.5h-27.5c-14.7 0-26.7 12-26.7 26.7s12 26.7 26.7 26.7h27.5v27.5c0 14.7 12 26.7 26.7 26.7s26.7-12 26.7-26.7v-27.5h27.5c14.7 0 26.7-12 26.7-26.7s-12-26.7-26.7-26.7z" fill="#FAFCFB" /><path d="M208.1 429.5c-21.9 0-39.7-17.8-39.7-39.7v-14.5h-14.5c-21.9 0-39.7-17.8-39.7-39.7 0-21.9 17.8-39.7 39.7-39.7h14.5v-14.5c0-21.9 17.8-39.7 39.7-39.7s39.7 17.8 39.7 39.7v14.5h14.5c21.9 0 39.7 17.8 39.7 39.7 0 21.9-17.8 39.7-39.7 39.7h-14.5v14.5c0 21.9-17.8 39.7-39.7 39.7z m-54.2-107.6c-7.5 0-13.7 6.1-13.7 13.7 0 7.5 6.1 13.7 13.7 13.7h27.5c7.2 0 13 5.8 13 13v27.5c0 7.5 6.1 13.7 13.7 13.7s13.7-6.1 13.7-13.7v-27.5c0-7.2 5.8-13 13-13h27.5c7.5 0 13.7-6.1 13.7-13.7 0-7.5-6.1-13.7-13.7-13.7h-27.5c-7.2 0-13-5.8-13-13v-27.5c0-7.5-6.1-13.7-13.7-13.7s-13.7 6.1-13.7 13.7v27.5c0 7.2-5.8 13-13 13h-27.5z" fill="#0F0F0F" /><path d="M805.3 243.4m-33.3 0a33.3 33.3 0 1 0 66.6 0 33.3 33.3 0 1 0-66.6 0Z" fill="#0F0F0F" /><path d="M805.3 402.2m-33.3 0a33.3 33.3 0 1 0 66.6 0 33.3 33.3 0 1 0-66.6 0Z" fill="#0F0F0F" /><path d="M884.7 322.8m-33.3 0a33.3 33.3 0 1 0 66.6 0 33.3 33.3 0 1 0-66.6 0Z" fill="#0F0F0F" /><path d="M725.8 322.8m-33.3 0a33.3 33.3 0 1 0 66.6 0 33.3 33.3 0 1 0-66.6 0Z" fill="#0F0F0F" /></svg>`;
+   }
+
+   function setAvatar(sessionId){ try{ const svg = svgAvatarForSession(sessionId); if(avatarEl) avatarEl.innerHTML = svg; }catch(e){console.warn('setAvatar failed', e);} }
+
+  // Persist choices
+  try{
+    const swork = localStorage.getItem('pomodoro_sound_work');
+    const sshort = localStorage.getItem('pomodoro_sound_short');
+    const slong = localStorage.getItem('pomodoro_sound_long');
+    const savedVol = localStorage.getItem('pomodoro_volume');
+    if (swork && workSoundSelect) workSoundSelect.value = swork;
+    if (sshort && shortSoundSelect) shortSoundSelect.value = sshort;
+    if (slong && longSoundSelect) longSoundSelect.value = slong;
+    if (savedVol && volumeControl) volumeControl.value = savedVol;
+  }catch(e){}
+
+  function persistSessionChoice(id, value){ try{ localStorage.setItem(`pomodoro_sound_${id}`, value); }catch(e){} }
+  if (workSoundSelect) workSoundSelect.addEventListener('change', ()=> persistSessionChoice('work', workSoundSelect.value));
+  if (shortSoundSelect) shortSoundSelect.addEventListener('change', ()=> persistSessionChoice('short', shortSoundSelect.value));
+  if (longSoundSelect) longSoundSelect.addEventListener('change', ()=> persistSessionChoice('long', longSoundSelect.value));
+  if (volumeControl) volumeControl.addEventListener('input', ()=> { try{ localStorage.setItem('pomodoro_volume', volumeControl.value); }catch(e){} });
+
+  // Preview button
+  if (previewBtn) previewBtn.addEventListener('click', ()=> { const t = previewTarget.value || 'work'; playSessionSound(t); });
+
+  // Keyboard shortcuts and controls
+  document.addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); if (state === 'running') pause(); else start(); } });
+  if (startBtn) startBtn.addEventListener('click', start);
+  if (pauseBtn) pauseBtn.addEventListener('click', pause);
+  if (resetBtn) resetBtn.addEventListener('click', reset);
+  if (applyBtn) applyBtn.addEventListener('click', applyDurations);
+
+  window.pomodoro = { start, pause, reset, setDurations: d => { Object.assign(durations, d); applyDurations(); } };
+
+  // Initialize
+  setSession('work'); try{ setAvatar('idle'); }catch(e){} reset();
+})();</script>
+</body>
+</html>
